@@ -265,8 +265,8 @@ void TaskButtons(void *pvParameters)
       if (digitalRead(btnPins[i]) == LOW)
       {
         menuIndex = i;
-        Serial.print("Menu: ");
-        Serial.println(menuIndex);
+        // Serial.print("Menu: ");
+        // Serial.println(menuIndex);
         vTaskDelay(300 / portTICK_PERIOD_MS);
       }
     }
@@ -276,25 +276,60 @@ void TaskButtons(void *pvParameters)
 
 void TaskESR(void *pvParameters)
 {
+  String data = "";
+
   while (1)
   {
-    for (int i = 0; i < 10; i++)
+    while (Serial.available())
     {
-      esrValues[i] = random(10, 100) / 10.0;
+      char c = Serial.read();
+
+      if (c == '\n') // full line received
+      {
+        // ===== PARSE DATA =====
+
+        // TEMP
+        int tIndex = data.indexOf("TEMP=");
+        if (tIndex != -1)
+        {
+          temperature = data.substring(tIndex + 5).toFloat();
+        }
+
+        // HUM
+        int hIndex = data.indexOf("HUM=");
+        if (hIndex != -1)
+        {
+          humidity = data.substring(hIndex + 4).toFloat();
+        }
+
+        // ESR values
+        for (int i = 0; i < 10; i++)
+        {
+          String key = "ESR" + String(i + 1) + "=";
+          int index = data.indexOf(key);
+
+          if (index != -1)
+          {
+            esrValues[i] = data.substring(index + key.length()).toFloat();
+          }
+        }
+
+        data = ""; // clear buffer
+      }
+      else
+      {
+        data += c; // build string
+      }
     }
 
-    // Simulate sensors
-    temperature = random(250, 350) / 10.0;
-    humidity = random(400, 800) / 10.0;
-
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    vTaskDelay(10 / portTICK_PERIOD_MS);
   }
 }
 
 // ===== SETUP =====
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(9600);
 
   for (int i = 0; i < 5; i++)
   {
