@@ -16,9 +16,14 @@ float esrValues[10];
 float temperature = 28.5;
 float humidity = 65.0;
 
+int testTime = 20; //  FIX
+int menuSelection = 0;
+
 // Button pins
 const int btnPins[5] = {12, 13, 14, 27, 26};
 volatile int menuIndex = 0;
+
+TaskHandle_t displayTaskHandle;
 
 // ===== HTML PAGE =====
 String htmlPage()
@@ -258,18 +263,101 @@ void TaskDisplay(void *pvParameters)
 
 void TaskButtons(void *pvParameters)
 {
+  int testTimes[3] = {20, 30, 40};
+
   while (1)
   {
-    for (int i = 0; i < 5; i++)
+    // ===== ENTER MENU (wait for press + release) =====
+    if (digitalRead(13) == HIGH)
     {
-      if (digitalRead(btnPins[i]) == LOW)
+      while (digitalRead(13) == HIGH)
+        ; // wait release
+
+      vTaskSuspend(displayTaskHandle); // pause display
+      tft.fillScreen(TFT_BLACK);
+
+      bool inMenu = true;
+
+      while (inMenu)
       {
-        menuIndex = i;
-        // Serial.print("Menu: ");
-        // Serial.println(menuIndex);
-        vTaskDelay(300 / portTICK_PERIOD_MS);
+        tft.fillScreen(TFT_BLACK);
+
+        // ===== TITLE =====
+        tft.setTextColor(TFT_GREEN);
+        tft.setTextSize(2);
+        tft.setCursor(80, 10);
+        tft.println("MENU");
+
+        // ===== UP (27) =====
+        if (digitalRead(27) == HIGH)
+        {
+          while (digitalRead(27) == HIGH)
+            ; // wait release
+
+          menuSelection--;
+          if (menuSelection < 0)
+            menuSelection = 2;
+        }
+
+        // ===== DOWN (12) =====
+        if (digitalRead(12) == HIGH)
+        {
+          while (digitalRead(12) == HIGH)
+            ;
+
+          menuSelection++;
+          if (menuSelection > 2)
+            menuSelection = 0;
+        }
+
+        // ===== SELECT (26) =====
+        if (digitalRead(26) == HIGH)
+        {
+          while (digitalRead(26) == HIGH)
+            ;
+
+          testTime = testTimes[menuSelection];
+        }
+
+        // ===== EXIT MENU (13) =====
+        if (digitalRead(13) == HIGH)
+        {
+          inMenu = false;
+          vTaskDelay(200 / portTICK_PERIOD_MS); // debounce
+          break;
+        }
+
+        // ===== DISPLAY OPTIONS =====
+        for (int i = 0; i < 3; i++)
+        {
+          int y = 60 + i * 40;
+
+          if (i == menuSelection)
+          {
+            // highlight box
+            tft.fillRoundRect(10, y - 5, 220, 30, 5, TFT_YELLOW);
+            tft.setTextColor(TFT_BLACK);
+          }
+          else
+          {
+            tft.setTextColor(TFT_WHITE);
+          }
+
+          tft.setCursor(20, y);
+          tft.print("Test Time: ");
+          tft.print(testTimes[i]);
+        }
+
+        vTaskDelay(100 / portTICK_PERIOD_MS);
       }
+
+      // ===== EXIT CLEANUP =====
+      vTaskResume(displayTaskHandle);
+      tft.fillScreen(TFT_BLACK);
+
+      vTaskDelay(200 / portTICK_PERIOD_MS);
     }
+
     vTaskDelay(50 / portTICK_PERIOD_MS);
   }
 }
@@ -333,7 +421,7 @@ void setup()
 
   for (int i = 0; i < 5; i++)
   {
-    pinMode(btnPins[i], INPUT_PULLUP);
+    pinMode(btnPins[i], INPUT);
   }
 
   WiFi.begin(ssid, password);
@@ -358,7 +446,7 @@ void setup()
   xTaskCreatePinnedToCore(TaskWebServer, "Web", 4096, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(TaskButtons, "Buttons", 2048, NULL, 1, NULL, 0);
   xTaskCreatePinnedToCore(TaskESR, "ESR", 2048, NULL, 1, NULL, 1);
-  xTaskCreatePinnedToCore(TaskDisplay, "Display", 4096, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(TaskDisplay, "Display", 4096, NULL, 1, &displayTaskHandle, 1);
 }
 
 void loop() {}
